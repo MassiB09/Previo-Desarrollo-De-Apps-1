@@ -1,12 +1,13 @@
 package ar.edu.examen.iiot.data
 
 import android.content.Context
+import ar.edu.examen.iiot.model.PlantRules
 import ar.edu.examen.iiot.model.Reading
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
-class PlantRepository(private val context: Context) {
-    private val database = PlantDatabase(context)
+class PlantRepository(context: Context) {
+    private val database = PlantDatabase(context.applicationContext)
     private val api = Retrofit.Builder()
         .baseUrl("https://api.thingspeak.com/")
         .addConverterFactory(GsonConverterFactory.create())
@@ -15,6 +16,19 @@ class PlantRepository(private val context: Context) {
 
     var lastSyncMessage: String = "Datos locales"
         private set
+
+    fun currentThreshold(): Double {
+        val stored = database.configuration(THRESHOLD_KEY)?.toDoubleOrNull()
+        return if (stored != null && PlantRules.isValidThreshold(stored)) {
+            stored
+        } else {
+            PlantRules.DEFAULT_TEMPERATURE_LIMIT
+        }
+    }
+
+    fun saveThreshold(value: Double) {
+        database.saveConfiguration(THRESHOLD_KEY, value.toString())
+    }
 
     fun localReadings(): List<Reading> {
         val rows = database.latest()
@@ -25,6 +39,8 @@ class PlantRepository(private val context: Context) {
 
     fun search(query: String): List<Reading> =
         if (query.isBlank()) database.latest() else database.findLatestByName(query)
+
+    fun history(machineId: String): List<Reading> = database.history(machineId)
 
     suspend fun sync(): List<Reading> {
         var remoteTemperature: Double? = null
@@ -87,5 +103,9 @@ class PlantRepository(private val context: Context) {
                 source = "Simulación local"
             )
         )
+    }
+
+    private companion object {
+        const val THRESHOLD_KEY = "temperature_threshold"
     }
 }

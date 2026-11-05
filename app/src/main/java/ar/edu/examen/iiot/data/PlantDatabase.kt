@@ -47,6 +47,28 @@ class PlantDatabase(context: Context) :
         writableDatabase.insertOrThrow("readings", null, values)
     }
 
+    fun configuration(key: String): String? {
+        readableDatabase.rawQuery(
+            "SELECT config_value FROM configuration WHERE config_key = ?",
+            arrayOf(key)
+        ).use { cursor ->
+            return if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+    }
+
+    fun saveConfiguration(key: String, value: String) {
+        val values = ContentValues().apply {
+            put("config_key", key)
+            put("config_value", value)
+        }
+        writableDatabase.insertWithOnConflict(
+            "configuration",
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
     fun latest(): List<Reading> {
         val sql = """SELECT r.id, r.machine_id, r.machine_name,
                    r.temperature, r.humidity, r.vibration, r.captured_at, r.source
@@ -67,9 +89,19 @@ class PlantDatabase(context: Context) :
                        SELECT machine_id, MAX(id) AS latest_id
                        FROM readings GROUP BY machine_id
                    ) x ON r.id = x.latest_id
-                   WHERE r.machine_name LIKE '%$filter%'
+                   WHERE r.machine_name LIKE ?
                    ORDER BY r.machine_name""".trimIndent()
-        return readableDatabase.rawQuery(sql, null).use(::readAll)
+        return readableDatabase.rawQuery(sql, arrayOf("%$filter%")).use(::readAll)
+    }
+
+    fun history(machineId: String): List<Reading> {
+        val sql = """SELECT id, machine_id, machine_name,
+                   temperature, humidity, vibration, captured_at, source
+                   FROM readings
+                   WHERE machine_id = ?
+                   ORDER BY captured_at DESC, id DESC
+                   LIMIT 10""".trimIndent()
+        return readableDatabase.rawQuery(sql, arrayOf(machineId)).use(::readAll)
     }
 
     private fun readAll(cursor: Cursor): List<Reading> {

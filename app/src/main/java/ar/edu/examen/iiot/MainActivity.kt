@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import ar.edu.examen.iiot.data.PlantRepository
 import ar.edu.examen.iiot.databinding.ActivityMainBinding
 import ar.edu.examen.iiot.ui.DashboardScreen
+import ar.edu.examen.iiot.ui.HistoryScreen
 import ar.edu.examen.iiot.ui.PlantViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -26,7 +27,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     private var movement: Float? = null
 
     private val viewModel: PlantViewModel by viewModels {
-        PlantViewModel.Factory(PlantRepository(this))
+        PlantViewModel.Factory(PlantRepository(applicationContext))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,13 +44,24 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         )
         binding.composePanel.setContent {
             val state = viewModel.state.collectAsState().value
-            DashboardScreen(
-                state = state,
-                onFilterChanged = viewModel::filter,
-                onThresholdClick = viewModel::configureThreshold,
-                onHistoryClick = viewModel::showHistory,
-                onDismissNotification = viewModel::dismissNotification
-            )
+            if (state.historyMachineId != null) {
+                HistoryScreen(
+                    machineName = state.historyMachineName ?: state.historyMachineId.orEmpty(),
+                    readings = state.historyReadings,
+                    onClose = viewModel::closeHistory
+                )
+            } else {
+                DashboardScreen(
+                    state = state,
+                    onFilterChanged = viewModel::filter,
+                    onThresholdClick = viewModel::configureThreshold,
+                    onThresholdInputChanged = viewModel::updateThresholdInput,
+                    onSaveThreshold = viewModel::saveThreshold,
+                    onDismissThresholdDialog = viewModel::dismissThresholdDialog,
+                    onHistoryClick = viewModel::showHistory,
+                    onDismissNotification = viewModel::dismissNotification
+                )
+            }
         }
         lifecycleScope.launch {
             viewModel.state.collectLatest { state ->

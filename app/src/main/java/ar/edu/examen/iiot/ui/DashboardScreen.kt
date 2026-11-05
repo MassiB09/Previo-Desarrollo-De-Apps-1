@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -23,7 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import ar.edu.examen.iiot.model.PlantRules
 import ar.edu.examen.iiot.model.Reading
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -34,10 +38,22 @@ fun DashboardScreen(
     state: DashboardState,
     onFilterChanged: (String) -> Unit,
     onThresholdClick: () -> Unit,
+    onThresholdInputChanged: (String) -> Unit,
+    onSaveThreshold: () -> Unit,
+    onDismissThresholdDialog: () -> Unit,
     onHistoryClick: (String) -> Unit,
     onDismissNotification: () -> Unit
 ) {
     MaterialTheme {
+        if (state.thresholdDialogVisible) {
+            ThresholdDialog(
+                input = state.thresholdInput,
+                error = state.thresholdError,
+                onInputChanged = onThresholdInputChanged,
+                onSave = onSaveThreshold,
+                onDismiss = onDismissThresholdDialog
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -72,7 +88,7 @@ fun DashboardScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedButton(onClick = onThresholdClick) {
-                    Text("Umbral: ${state.threshold.toInt()} °C")
+                    Text("Umbral: ${formatThreshold(state.threshold)} °C")
                 }
                 if (state.loading) {
                     Text("Sincronizando...", modifier = Modifier.padding(top = 12.dp))
@@ -104,7 +120,7 @@ fun DashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(state.readings, key = { it.machineId }) { reading ->
-                    EquipmentCard(reading, onHistoryClick)
+                    EquipmentCard(reading, state.threshold, onHistoryClick)
                 }
                 item {
                     Text(
@@ -122,8 +138,12 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun EquipmentCard(reading: Reading, onHistoryClick: (String) -> Unit) {
-    val alert = reading.temperature >= 65.0
+private fun EquipmentCard(
+    reading: Reading,
+    threshold: Double,
+    onHistoryClick: (String) -> Unit
+) {
+    val alert = PlantRules.requiresAttention(reading, threshold)
     val time = SimpleDateFormat("dd/MM HH:mm", Locale("es", "AR"))
         .format(Date(reading.timestamp))
     Card(
@@ -173,3 +193,53 @@ private fun EquipmentCard(reading: Reading, onHistoryClick: (String) -> Unit) {
         }
     }
 }
+
+@Composable
+private fun ThresholdDialog(
+    input: String,
+    error: String?,
+    onInputChanged: (String) -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Umbral de alarma") },
+        text = {
+            Column {
+                Text("Ingresá un valor entre 30 y 120 °C.")
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = onInputChanged,
+                    label = { Text("Temperatura (°C)") },
+                    singleLine = true,
+                    isError = error != null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) {
+                    Text(
+                        error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onSave) {
+                Text("Guardar")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+private fun formatThreshold(value: Double): String =
+    if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()

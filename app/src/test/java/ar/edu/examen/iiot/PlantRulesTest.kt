@@ -24,4 +24,20 @@ class PlantRulesTest {
     @Test fun thresholdIsAlert() {
         assertTrue(PlantRules.requiresAttention(sample(65.0)))
     }
+
+    @Test fun customThresholdIsRespected() {
+        assertTrue(PlantRules.requiresAttention(sample(70.0), 70.0))
+        assertFalse(PlantRules.requiresAttention(sample(69.9), 70.0))
+    }
+
+    @Test fun thresholdValidationAcceptsBounds() {
+        assertTrue(PlantRules.isValidThreshold(30.0))
+        assertTrue(PlantRules.isValidThreshold(120.0))
+    }
+
+    @Test fun thresholdValidationRejectsOutOfRange() {
+        assertFalse(PlantRules.isValidThreshold(29.9))
+        assertFalse(PlantRules.isValidThreshold(120.1))
+        assertFalse(PlantRules.isValidThreshold(Double.NaN))
+    }
 }
